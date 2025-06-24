@@ -53,13 +53,13 @@ if link_id:
         st.header("Olá, queremos ouvir você! Avalie seu atendimento!")
         st.info(f"""
         **OS:** {dados['OS']}
-
+        
         **Cliente:** {dados['Cliente']}
-
+        
         **Serviço:** {dados['Serviço']}
-
+        
         **Data:** {dados['Data 1']}
-
+        
         **Prestador:** {dados['Prestador']}
         """)
         nota = st.radio("Avaliação (1=ruim, 5=ótimo)", [1,2,3,4,5], horizontal=True)
@@ -169,11 +169,40 @@ with col_dir:
         # Gera link completo
         df_dashboard["Link Completo"] = df_dashboard["link_id"].apply(lambda x: f"{APP_URL}?link_id={x}")
 
-        total_links = len(df_dashboard)
-        total_respondidos = df_dashboard['Respondido'].sum()
+        # ----------- FILTROS DE DATA E CLIENTE -----------
+        df_dashboard['Data 1'] = pd.to_datetime(df_dashboard['Data 1'], errors='coerce')
+        data_min = df_dashboard['Data 1'].min()
+        data_max = df_dashboard['Data 1'].max()
+        data_inicial, data_final = st.date_input(
+            "Filtrar por Data (inicial/final)",
+            value=(data_min, data_max),
+            min_value=data_min, max_value=data_max,
+            key="data_filter"
+        ) if pd.notnull(data_min) and pd.notnull(data_max) else (None, None)
+
+        nomes_unicos = sorted(df_dashboard["Cliente"].dropna().unique())
+        cliente_filtrado = st.selectbox(
+            "Filtrar por Cliente",
+            options=["(Todos)"] + nomes_unicos,
+            key="cliente_filter"
+        )
+
+        # Aplica os filtros
+        df_filtrado = df_dashboard.copy()
+        if data_inicial and data_final:
+            df_filtrado = df_filtrado[
+                (df_filtrado["Data 1"] >= pd.to_datetime(data_inicial)) &
+                (df_filtrado["Data 1"] <= pd.to_datetime(data_final))
+            ]
+        if cliente_filtrado != "(Todos)":
+            df_filtrado = df_filtrado[df_filtrado["Cliente"] == cliente_filtrado]
+        # --------------------------------------------------
+
+        total_links = len(df_filtrado)
+        total_respondidos = df_filtrado['Respondido'].sum()
         perc_respondidos = (total_respondidos / total_links * 100) if total_links > 0 else 0
 
-        notas_validas = pd.to_numeric(df_dashboard[df_dashboard['Respondido']]['nota'], errors='coerce').dropna()
+        notas_validas = pd.to_numeric(df_filtrado[df_filtrado['Respondido']]['nota'], errors='coerce').dropna()
         media_nota = notas_validas.mean() if not notas_validas.empty else None
 
         st.header("Métricas dos Links")
@@ -193,7 +222,7 @@ with col_dir:
         # Download Excel completo
         output = BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df_dashboard.to_excel(writer, index=False, sheet_name='Links')
+            df_filtrado.to_excel(writer, index=False, sheet_name='Links')
         xlsx_data = output.getvalue()
         st.download_button(
             label="📥 Baixar tabela Excel completa",
@@ -204,7 +233,7 @@ with col_dir:
 
         # Exibe a tabela final com link completo e notas
         st.dataframe(
-            df_dashboard.rename(columns={
+            df_filtrado.rename(columns={
                 "link_id": "LinkID",
                 "OS": "OS",
                 "Cliente": "Cliente",
