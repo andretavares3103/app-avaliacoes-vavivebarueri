@@ -171,14 +171,16 @@ with col_dir:
 
         # ----------- FILTROS DE DATA E CLIENTE -----------
         df_dashboard['Data 1'] = pd.to_datetime(df_dashboard['Data 1'], errors='coerce')
-        data_min = df_dashboard['Data 1'].min()
-        data_max = df_dashboard['Data 1'].max()
-        data_inicial, data_final = st.date_input(
-            "Filtrar por Data (inicial/final)",
-            value=(data_min, data_max),
-            min_value=data_min, max_value=data_max,
+        datas_unicas = df_dashboard['Data 1'].dropna().dt.date.unique()
+        datas_unicas = sorted(datas_unicas)
+        
+        data_selecionada = st.multiselect(
+            "Filtrar por Data (escolha uma ou mais datas)",
+            options=["(Todas)"] + [d.strftime("%Y-%m-%d") for d in datas_unicas],
+            default="(Todas)",
             key="data_filter"
-        ) if pd.notnull(data_min) and pd.notnull(data_max) else (None, None)
+        )
+
 
         nomes_unicos = sorted(df_dashboard["Cliente"].dropna().unique())
         cliente_filtrado = st.selectbox(
@@ -189,11 +191,12 @@ with col_dir:
 
         # Aplica os filtros
         df_filtrado = df_dashboard.copy()
-        if data_inicial and data_final:
-            df_filtrado = df_filtrado[
-                (df_filtrado["Data 1"] >= pd.to_datetime(data_inicial)) &
-                (df_filtrado["Data 1"] <= pd.to_datetime(data_final))
-            ]
+        if "(Todas)" not in data_selecionada:
+            datas_filtrar = [pd.to_datetime(d).date() for d in data_selecionada]
+            df_filtrado = df_filtrado[df_filtrado['Data 1'].dt.date.isin(datas_filtrar)]
+        if cliente_filtrado != "(Todos)":
+            df_filtrado = df_filtrado[df_filtrado["Cliente"] == cliente_filtrado]
+
         if cliente_filtrado != "(Todos)":
             df_filtrado = df_filtrado[df_filtrado["Cliente"] == cliente_filtrado]
         # --------------------------------------------------
